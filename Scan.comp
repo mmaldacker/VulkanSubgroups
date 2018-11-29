@@ -1,0 +1,74 @@
+#version 450
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+layout(std430, binding = 0) buffer Input
+{
+   float inputs[];
+};
+
+layout(std430, binding = 1) buffer Output
+{
+   float outputs[];
+};
+
+layout(std430, binding = 2) buffer PartialSums
+{
+   float partial_sums[];
+};
+
+layout (local_size_x_id = 1) in;
+layout (constant_id = 2) const int sumSubGroupSize = 64;
+
+layout(push_constant) uniform PushConsts
+{
+  int n;
+} consts;
+
+shared float sdata[sumSubGroupSize];
+
+void main()
+{
+    float sum = 0.0;
+    if (gl_GlobalInvocationID.x < consts.n)
+    {
+        sum = inputs[gl_GlobalInvocationID.x];
+    }
+
+    sum = subgroupInclusiveAdd(sum);
+
+    if (gl_SubgroupInvocationID == gl_SubgroupSize - 1)
+    {
+        sdata[gl_SubgroupID] = sum;
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_SubgroupID == 0)
+    {
+        float warpSum = (gl_LocalInvocationID.x < gl_WorkGroupSize.x / gl_SubgroupSize) ? sdata[gl_SubgroupInvocationID] : 0;
+        warpSum = subgroupInclusiveAdd(warpSum);
+        sdata[gl_SubgroupInvocationID] = warpSum;
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    float blockSum = 0;
+    if (gl_SubgroupID > 0)
+    {
+        blockSum = sdata[gl_SubgroupID - 1];
+    }
+
+    sum += blockSum;
+
+    if (gl_GlobalInvocationID.x < consts.n)
+    {
+        outputs[gl_GlobalInvocationID.x] = sum;
+    }
+
+    if (gl_LocalInvocationID.x == gl_WorkGroupSize.x - 1)
+    {
+        partial_sums[gl_LocalInvocationID.x] = sum;
+    }
+}
