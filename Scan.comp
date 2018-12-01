@@ -46,7 +46,7 @@ void main()
 
     if (gl_SubgroupID == 0)
     {
-        float warpSum = sum = gl_SubgroupInvocationID < gl_NumSubgroups ? sdata[gl_SubgroupInvocationID] : 0;
+        float warpSum = gl_SubgroupInvocationID < gl_NumSubgroups ? sdata[gl_SubgroupInvocationID] : 0;
         warpSum = subgroupInclusiveAdd(warpSum);
         sdata[gl_SubgroupInvocationID] = warpSum;
     }

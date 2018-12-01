@@ -23,13 +23,19 @@ add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR})
 compile_shader(SOURCES
                  ${CMAKE_CURRENT_SOURCE_DIR}/Reduce.comp
                  ${CMAKE_CURRENT_SOURCE_DIR}/Scan.comp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/Add.comp
                OUTPUT "vulkansubgroups_spirv"
                VERSION 1.1)
 
 add_executable(VulkanSubgroups
     main.cpp
+    reduce.h
+    reduce.cpp
+    scan.h
+    scan.cpp
     Reduce.comp
     Scan.comp
+    Add.comp
     ${CMAKE_CURRENT_BINARY_DIR}/vulkansubgroups_spirv.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/vulkansubgroups_spirv.h
 )
