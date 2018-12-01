@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 
 project(VulkanSubgroups)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # cmake file to download and include dependencies
 include(cmake/DownloadProject.cmake)
@@ -12,6 +12,13 @@ download_project(PROJ                Vortex2D
                  GIT_TAG             master
                  ${UPDATE_DISCONNECTED_IF_AVAILABLE})
 add_subdirectory(${Vortex2D_SOURCE_DIR} ${Vortex2D_BINARY_DIR})
+
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+download_project(PROJ                benchmark
+                 GIT_REPOSITORY      https://github.com/google/benchmark.git
+                 GIT_TAG             v1.4.1
+                 ${UPDATE_DISCONNECTED_IF_AVAILABLE})
+add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR})
 
 compile_shader(SOURCES
                  ${CMAKE_CURRENT_SOURCE_DIR}/Reduce.comp
@@ -33,4 +40,4 @@ if (WIN32)
     vortex2d_copy_dll(VulkanSubgroups)
 endif()
 
-target_link_libraries(VulkanSubgroups vortex2d)
+target_link_libraries(VulkanSubgroups vortex2d benchmark)
