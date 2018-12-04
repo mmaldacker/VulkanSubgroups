@@ -8,7 +8,7 @@ Vortex2D::Renderer::Device* gDevice = nullptr;
 
 int main(int argc, char** argv)
 {
-  Vortex2D::Renderer::Instance instance("VulkanSubgroups", {}, true);
+  Vortex2D::Renderer::Instance instance("VulkanSubgroups", {}, false);
   auto physicalDevice = instance.GetPhysicalDevice();
 
   auto properties = physicalDevice.getProperties2<vk::PhysicalDeviceProperties2, vk::PhysicalDeviceSubgroupProperties>();

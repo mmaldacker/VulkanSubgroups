@@ -11,10 +11,14 @@ public:
        int size,
        int localSize);
 
-  std::vector<float> operator()(const std::vector<float>& input);
+  void Upload(const std::vector<float>& input);
+  std::vector<float> Download();
+  void Submit();
+  uint64_t GetElapsedNs();
 
 private:
-  Vortex2D::Renderer::CommandBuffer mScanCmd;
+  Vortex2D::Renderer::Timer mTimer;
+  Vortex2D::Renderer::CommandBuffer mUploadCmd, mDownloadCmd, mScanCmd;
   Vortex2D::Renderer::Work mScanWork;
   Vortex2D::Renderer::Work mAddWork;
 

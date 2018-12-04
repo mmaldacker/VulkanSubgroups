@@ -16,7 +16,10 @@ int NextSize(int size, int localSize)
 Scan::Scan(const Vortex2D::Renderer::Device& device,
            int size,
            int localSize)
-  : mScanCmd(device)
+  : mTimer(device)
+  , mUploadCmd(device)
+  , mDownloadCmd(device)
+  , mScanCmd(device)
   , mScanWork(device, {size, localSize}, Vortex2D::SPIRV::Scan_comp)
   , mAddWork(device, {NextSize(size, localSize), localSize}, Vortex2D::SPIRV::Add_comp)
   , mLocalInput(device, size, VMA_MEMORY_USAGE_CPU_TO_GPU)
@@ -39,9 +42,20 @@ Scan::Scan(const Vortex2D::Renderer::Device& device,
     n = NextSize(n, localSize);
   }
 
-  mScanCmd.Record([&](vk::CommandBuffer commandBuffer)
+  mUploadCmd.Record([&](vk::CommandBuffer commandBuffer)
   {
     mBuffers[0].CopyFrom(commandBuffer, mLocalInput);
+  });
+
+  mDownloadCmd.Record([&](vk::CommandBuffer commandBuffer)
+  {
+    mLocalOutput.CopyFrom(commandBuffer, mBuffers[0]);
+  });
+
+  mScanCmd.Record([&](vk::CommandBuffer commandBuffer)
+  {
+    mTimer.Start(commandBuffer);
+
     int n = size;
 
     mScan[0].PushConstant(commandBuffer, n);
@@ -63,44 +77,35 @@ Scan::Scan(const Vortex2D::Renderer::Device& device,
       n = NextSize(n, localSize);
     }
 
-    mLocalOutput.CopyFrom(commandBuffer, mBuffers[0]);
+    mTimer.Stop(commandBuffer);
   });
 }
 
-std::vector<float> Scan::operator()(const std::vector<float>& input)
+void Scan::Upload(const std::vector<float>& input)
 {
   Vortex2D::Renderer::CopyFrom(mLocalInput, input);
+  mUploadCmd.Submit();
+}
 
-  mScanCmd.Submit();
-  mScanCmd.Wait();
+std::vector<float> Scan::Download()
+{
+  mDownloadCmd.Submit();
+  mDownloadCmd.Wait();
 
   std::vector<float> output(mLocalOutput.Size() / sizeof(float), 0.0f);
   Vortex2D::Renderer::CopyTo(mLocalOutput, output);
   return output;
 }
 
-void CheckScan()
+void Scan::Submit()
 {
-  int size = 300;
-  Scan scan(*gDevice, size, 256);
+  mScanCmd.Submit();
+  mScanCmd.Wait();
+}
 
-  std::vector<float> inputData(size, 1.0f);
-  std::iota(inputData.begin(), inputData.end(), 1.0f);
-
-  auto output = scan(inputData);
-
-  std::vector<float> expectedOutput(size);
-  std::inclusive_scan(std::execution::seq, inputData.begin(), inputData.end(), expectedOutput.begin());
-
-  for (std::size_t i = 0; i < size; i++)
-  {
-    if (output[i] != expectedOutput[i])
-    {
-      std::cout << "Diference at " << i << " values " << output[i] << " != " << expectedOutput[i] << std::endl;
-    }
-  }
-
-  std::cout << "Scan complete" << std::endl;
+uint64_t Scan::GetElapsedNs()
+{
+  return mTimer.GetElapsedNs();
 }
 
 static void Scan_GPU_Subgroup(benchmark::State& state)
@@ -114,7 +119,8 @@ static void Scan_GPU_Subgroup(benchmark::State& state)
 
   for (auto _ : state)
   {
-    benchmark::DoNotOptimize(scan(inputData));
+    scan.Submit();
+    state.SetIterationTime(scan.GetElapsedNs() / 1000000000.0);
   }
 }
 
@@ -122,12 +128,10 @@ static void Scan_GPU_SharedMemory(benchmark::State& state)
 {
   auto size = state.range(0);
 
+  Vortex2D::Renderer::Timer timer(*gDevice);
   Vortex2D::Fluid::PrefixScan scan(*gDevice, {size, 1});
 
-  Vortex2D::Renderer::Buffer<float> localInput(*gDevice, size, VMA_MEMORY_USAGE_CPU_TO_GPU);
   Vortex2D::Renderer::Buffer<float> input(*gDevice, size, VMA_MEMORY_USAGE_GPU_ONLY);
-
-  Vortex2D::Renderer::Buffer<float> localOutput(*gDevice, size, VMA_MEMORY_USAGE_CPU_ONLY);
   Vortex2D::Renderer::Buffer<float> output(*gDevice, size, VMA_MEMORY_USAGE_GPU_TO_CPU);
 
   Vortex2D::Renderer::Buffer<Vortex2D::Renderer::DispatchParams> dispatchParams(*gDevice);
@@ -137,9 +141,9 @@ static void Scan_GPU_SharedMemory(benchmark::State& state)
   Vortex2D::Renderer::CommandBuffer cmd(*gDevice);
   cmd.Record([&](vk::CommandBuffer commandBuffer)
   {
-    input.CopyFrom(commandBuffer, localInput);
+    timer.Start(commandBuffer);
     boundScan.Record(commandBuffer);
-    localOutput.CopyFrom(commandBuffer, output);
+    timer.Stop(commandBuffer);
   });
 
   std::vector<float> outputData(size);
@@ -148,8 +152,7 @@ static void Scan_GPU_SharedMemory(benchmark::State& state)
   {
     cmd.Submit();
     cmd.Wait();
-
-    Vortex2D::Renderer::CopyTo(localOutput, outputData);
+    state.SetIterationTime(timer.GetElapsedNs() / 1000000000.0);
   }
 }
 
@@ -182,7 +185,33 @@ static void Scan_CPU_Par(benchmark::State& state)
 }
 
 
-BENCHMARK(Scan_GPU_Subgroup)->Range(8, 8<<20);
-BENCHMARK(Scan_GPU_SharedMemory)->Range(8, 8<<20);
+BENCHMARK(Scan_GPU_Subgroup)->Range(8, 8<<20)->UseManualTime();
+BENCHMARK(Scan_GPU_SharedMemory)->Range(8, 8<<20)->UseManualTime();
 BENCHMARK(Scan_CPU_Seq)->Range(8, 8<<20);
 BENCHMARK(Scan_CPU_Par)->Range(8, 8<<20);
+
+void CheckScan()
+{
+  int size = 300;
+  Scan scan(*gDevice, size, 256);
+
+  std::vector<float> inputData(size, 1.0f);
+  std::iota(inputData.begin(), inputData.end(), 1.0f);
+
+  scan.Upload(inputData);
+  scan.Submit();
+  auto output = scan.Download();
+
+  std::vector<float> expectedOutput(size);
+  std::inclusive_scan(std::execution::seq, inputData.begin(), inputData.end(), expectedOutput.begin());
+
+  for (std::size_t i = 0; i < size; i++)
+  {
+    if (output[i] != expectedOutput[i])
+    {
+      std::cout << "Diference at " << i << " values " << output[i] << " != " << expectedOutput[i] << std::endl;
+    }
+  }
+
+  std::cout << "Scan complete" << std::endl;
+}

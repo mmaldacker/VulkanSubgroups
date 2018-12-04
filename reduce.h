@@ -11,10 +11,14 @@ public:
          int size,
          int localSize);
 
-  float operator()(const std::vector<float>& input);
+  void Upload(const std::vector<float>& input);
+  float Download();
+  void Submit();
+  uint64_t GetElapsedNs();
 
 private:
-  Vortex2D::Renderer::CommandBuffer mReduceCmd;
+  Vortex2D::Renderer::Timer mTimer;
+  Vortex2D::Renderer::CommandBuffer mUploadCmd, mDownloadCmd, mReduceCmd;
   Vortex2D::Renderer::Work mReduceWork; // reduce shader
   std::vector<Vortex2D::Renderer::Buffer<float>> mBuffers; // buffers for input, intermediate results and output
   Vortex2D::Renderer::Buffer<float> mLocalInput, mLocalOutput; // buffers for copying input/output to device
