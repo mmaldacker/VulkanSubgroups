@@ -1,24 +1,29 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.11)
 
 project(VulkanSubgroups)
 
 set(CMAKE_CXX_STANDARD 17)
 
 # cmake file to download and include dependencies
-include(cmake/DownloadProject.cmake)
+include(FetchContent)
 
-download_project(PROJ                Vortex2D
-                 GIT_REPOSITORY      https://github.com/mmaldacker/Vortex2D.git
-                 GIT_TAG             master
-                 ${UPDATE_DISCONNECTED_IF_AVAILABLE})
-add_subdirectory(${Vortex2D_SOURCE_DIR} ${Vortex2D_BINARY_DIR})
+FetchContent_Declare(vortex2d
+                     GIT_REPOSITORY      https://github.com/mmaldacker/Vortex2D.git
+                     GIT_TAG             master)
+FetchContent_GetProperties(vortex2d)
+if(NOT vortex2d_POPULATED)
+  FetchContent_Populate(vortex2d)
+  add_subdirectory(${vortex2d_SOURCE_DIR} ${vortex2d_BINARY_DIR})
+endif()
 
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-download_project(PROJ                benchmark
-                 GIT_REPOSITORY      https://github.com/google/benchmark.git
-                 GIT_TAG             v1.4.1
-                 ${UPDATE_DISCONNECTED_IF_AVAILABLE})
-add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR})
+FetchContent_Declare(benchmark
+                     GIT_REPOSITORY      https://github.com/google/benchmark.git
+                     GIT_TAG             v1.4.1)
+if(NOT benchmark_POPULATED)
+  FetchContent_Populate(benchmark)
+  add_subdirectory(${benchmark_SOURCE_DIR} $benchmark_BINARY_DIR})
+endif()
 
 compile_shader(SOURCES
                  ${CMAKE_CURRENT_SOURCE_DIR}/Reduce.comp
