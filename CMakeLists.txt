@@ -22,7 +22,7 @@ FetchContent_Declare(benchmark
                      GIT_TAG             v1.4.1)
 if(NOT benchmark_POPULATED)
   FetchContent_Populate(benchmark)
-  add_subdirectory(${benchmark_SOURCE_DIR} $benchmark_BINARY_DIR})
+  add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR})
 endif()
 
 compile_shader(SOURCES
